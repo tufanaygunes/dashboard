@@ -216,7 +216,7 @@ VALID_USERNAME_PASSWORD_PAIRS = {
 }
 
 app = Dash(__name__)
-#server = app.server
+server = app.server
 auth = dash_auth.BasicAuth(
     app,
     VALID_USERNAME_PASSWORD_PAIRS
