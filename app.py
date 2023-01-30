@@ -198,6 +198,7 @@ accepted_no_trial=accepted[accepted['date']+timedelta(days=7)<now] #hala trial s
 paying_customers=accepted_no_trial.merge(cancelled, how='left',on='id',indicator=True)
 paying_customers2=paying_customers[paying_customers['_merge']=='left_only'] #trial surecinde iptal edenler cikarildi
 paying_customers2['check']=paying_customers2['id'].isin(frozen_liste)
+paying_customers2=paying_customers2[paying_customers2['check']==False]
 paying_customers2['fee_x']=paying_customers2['fee_x'].apply(lambda x:float(x))
 vis_pay_cus=paying_customers2.set_index('date_x')
 vis_pay_cus=vis_pay_cus.resample('M').sum()
