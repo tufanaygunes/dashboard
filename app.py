@@ -28,7 +28,7 @@ def get_alldata():
     {
         app(id: "gid://partners/App/5865267") {
           events(
-            types: [RELATIONSHIP_INSTALLED, RELATIONSHIP_UNINSTALLED, RELATIONSHIP_DEACTIVATED, SUBSCRIPTION_CHARGE_ACCEPTED, SUBSCRIPTION_CHARGE_ACTIVATED, SUBSCRIPTION_CHARGE_CANCELED, SUBSCRIPTION_CHARGE_DECLINED, SUBSCRIPTION_CHARGE_FROZEN, 
+            types: [SUBSCRIPTION_CHARGE_ACTIVATED, SUBSCRIPTION_CHARGE_CANCELED, SUBSCRIPTION_CHARGE_DECLINED, SUBSCRIPTION_CHARGE_FROZEN, 
             SUBSCRIPTION_CHARGE_UNFROZEN], after:"%s" , first: 100
           )  { 
               pageInfo {
@@ -38,64 +38,7 @@ def get_alldata():
               cursor
               node {
                 occurredAt
-                __typename
-                ... on RelationshipUninstalled {
-                  reason
-                  description
-    
-                  shop {
-                    
-                    id
-                    myshopifyDomain
-                    name
-                  }
-                }
-                ... on RelationshipInstalled {
-    
-                  shop {
-                    
-                    id
-                    myshopifyDomain
-                    name
-                  }
-                }
-                ... on RelationshipDeactivated {
-    
-                  shop {
-                    
-                    id
-                    myshopifyDomain
-                    name
-                  }
-                }
-                ... on RelationshipReactivated {
-    
-                  shop {
-                    
-                    id
-                    myshopifyDomain
-                    name
-                  }
-                }
-                ... on SubscriptionChargeAccepted {
-    
-                  charge {
-                    amount {
-                      currencyCode
-                      amount
-                    }
-                    billingOn
-                    id
-                    name
-                    test
-                  }
-                  shop {
-                    
-                    id
-                    myshopifyDomain
-                    name
-                  }
-                }
+                __typename                
                 ... on SubscriptionChargeActivated {
     
                   charge {
@@ -234,20 +177,27 @@ dff['date']=dff['date'].apply(lambda x:datetime.strptime(x,'%Y-%m-%dT%H:%M:%S.%f
     # dff=dff.sort_values(by=['id','date'],ascending=False)
     
 ids=dff.id.unique()
-    
-    
+      
 accepted=dff[ dff['type']=='SubscriptionChargeActivated'].sort_values(by=['date']).drop_duplicates(subset=['id'], keep='first')
 cancelled=dff[ dff['type']=='SubscriptionChargeCanceled'].sort_values(by=['date']).drop_duplicates(subset=['id'], keep='first')
 frozen=dff[ dff['type']=='SubscriptionChargeFrozen'].sort_values(by=['date']).drop_duplicates(subset=['id'], keep='first')
 unfrozen=dff[ dff['type']=='SubscriptionChargeUnfrozen'].sort_values(by=['date']).drop_duplicates(subset=['id'], keep='first')
 declined=dff[ dff['type']=='SubscriptionChargeDeclined'].sort_values(by=['date']).drop_duplicates(subset=['id'], keep='first')
-    
-    
+
+    # frozen cikarma
+frozen_iptal=frozen.merge(unfrozen, how='left',on='id',indicator=True)
+frozen_iptal['_merge']=np.where(frozen_iptal['date_y']>frozen_iptal['date_x'],'left_only','both')
+frozen_iptal=frozen_iptal[frozen_iptal['_merge']=='both']
+frozen_iptal=frozen_iptal.merge(accepted,how='inner',on='id')
+frozen_iptal.drop(['fee_x', 'type', 'date'], axis=1, inplace=True)
+frozen_iptal.rename(columns={'fee':'fee_x','date_x':'date_y','date_y':'date_x'}, inplace=True)
+frozen_liste=frozen_iptal.id.tolist()       
     
     # active paying customers - frozen unfrozen detayi da eklensin.
 accepted_no_trial=accepted[accepted['date']+timedelta(days=7)<now] #hala trial surecinde olanlar cikarildi
 paying_customers=accepted_no_trial.merge(cancelled, how='left',on='id',indicator=True)
 paying_customers2=paying_customers[paying_customers['_merge']=='left_only'] #trial surecinde iptal edenler cikarildi
+paying_customers2['check']=paying_customers2['id'].isin(frozen_liste)
 paying_customers2['fee_x']=paying_customers2['fee_x'].apply(lambda x:float(x))
 vis_pay_cus=paying_customers2.set_index('date_x')
 vis_pay_cus=vis_pay_cus.resample('M').sum()
@@ -256,6 +206,7 @@ vis_pay_cus=vis_pay_cus.reset_index()
     
     # churn - aktif iken iptal etmisler listesi
 churn=paying_customers[paying_customers['date_y']-paying_customers['date_x']>timedelta(days=7)]
+churn=pd.concat([churn,frozen_iptal[['date_y','fee_x']]])
 churn['fee_x']=churn['fee_x'].apply(lambda x:float(x))
 churn=churn.set_index('date_y')
 churn=churn.resample('M').sum()
@@ -290,7 +241,7 @@ app.layout = html.Div(children=[
         dcc.Graph(
             id='example-graph',
             figure=fig,
-            style={'width': '80vw', 'margin': 'auto'}
+            style={'width': '60vw', 'margin': 'auto'}
         )
     ])                                           
 if __name__ == '__main__':
